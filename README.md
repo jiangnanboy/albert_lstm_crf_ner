@@ -15,7 +15,7 @@
 3.没有对albert进行fine-tune。
 
 ### train
-setp 1: albert/tfmodel_2_pymodel.py
+setp 1: 利用albert/tfmodel_2_pymodel.py
 
 1.将tensorflow预训练模型转化为pytorch可用模型。
 
@@ -25,8 +25,7 @@ setp 1: albert/tfmodel_2_pymodel.py
 
 4.模型的参数见albert/configs/目录。
 
-
-setp 2: edit **models/config.yml**
+setp 2: 部分参数设置 models/config.yml
 
     embedding_size: 768
 	hidden_size: 128
@@ -44,6 +43,7 @@ step 3: train
 
     python main.py train
 	训练数据来自人民日报的标注数据
+	
 ### predict
 
     python main.py predict
