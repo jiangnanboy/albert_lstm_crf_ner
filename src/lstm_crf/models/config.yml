@@ -1,0 +1,11 @@
+embedding_size: 768
+hidden_size: 128
+model_path: models/
+batch_size: 64
+max_length: 128
+dropout: 0.5
+tags:
+  - ORG
+  - PER
+  - LOC
+  - T
