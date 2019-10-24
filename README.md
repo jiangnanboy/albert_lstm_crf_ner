@@ -1,4 +1,4 @@
-# 基于ALbert+BI-LSTM+CRF的中文命名实体识别 Pytorch
+# Albert+BI-LSTM+CRF的实体识别 Pytorch
 ### outline
 ![lstm_crf的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/lstm_crf_layers.png)
 
