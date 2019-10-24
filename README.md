@@ -1,12 +1,16 @@
 # 基于ALbert+BI-LSTM+CRF的中文命名实体识别 Pytorch
 ### outline
 ![lstm_crf的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/lstm_crf_layers.png)
-
+**lstm_crf**
 ![albert_lstm的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/albert_lstm.png)
+**albert_embedding_lstm**
 
 1.这里将每个句子split成一个个字token，将每个token映射成一个数字，再加入masks,然后输入给albert产生句子矩阵表示，比如一个batch=10，句子最大长度为126，加上首尾标志[CLS]和[SEP]，max_length=128,albert_base_zh模型输出的数据shape为(batch,max_length,hidden_states)=(10,128,768)。
+
 2.利用albert产生的表示作为lstm的embedding层。
+
 3.没有对albert进行fine-tune。
+
 ### train
 setp 1: albert/tfmodel_2_pymodel.py
 
