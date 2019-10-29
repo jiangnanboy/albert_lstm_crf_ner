@@ -55,6 +55,7 @@ step 3: train
 
 ### note
 在src/lstm_crf的model.py中
+
 a.albert的预训练模型作为embedding层
 
 	> bert_config =BertConfig.from_pretrained(str(config['albert_config_path']), share_type='all')
