@@ -56,15 +56,17 @@ step 3: train
 ### note
 在src/lstm_crf的model.py中
 a.albert的预训练模型作为embedding层
-	bert_config =BertConfig.from_pretrained(str(config['albert_config_path']), share_type='all')
-	self.word_embeddings = BertModel.from_pretrained(config['bert_dir'], config=bert_config)
-	self.word_embeddings.to(DEVICE)
-	self.word_embeddings.eval()
+
+	> bert_config =BertConfig.from_pretrained(str(config['albert_config_path']), share_type='all')
+	  self.word_embeddings = BertModel.from_pretrained(config['bert_dir'], config=bert_config)
+	  self.word_embeddings.to(DEVICE)
+	  self.word_embeddings.eval()
 
 b.embedding的输出是(batch_size, seq_len, embedding_dim)
-	embeddings = self.word_embeddings(input_ids=sentence, attention_mask=mask)
-	all_hidden_states, all_attentions = embeddings[-2:]  # 这里获取所有层的hidden_satates以及attentions
-	embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states的shape
+
+	> embeddings = self.word_embeddings(input_ids=sentence, attention_mask=mask)
+	  all_hidden_states, all_attentions = embeddings[-2:]  # 这里获取所有层的hidden_satates以及attentions
+	  embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states的shape
 
 ### REFERENCES
 -  https://github.com/huggingface/transformers
