@@ -2,11 +2,15 @@
 ### outline
 ![lstm_crf的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/lstm_crf_layers.png)
 
+<<<<<<< Updated upstream:README.md
 **lstm_crf**
 
 ![albert_lstm的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/albert_lstm.png)
 
 **albert_embedding_lstm**
+=======
+![albert_lstm的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/albert_lstm.png)
+>>>>>>> Stashed changes:src/lstm_crf/README.md
 
 1.这里将每个句子split成一个个字token，将每个token映射成一个数字，再加入masks,然后输入给albert产生句子矩阵表示，比如一个batch=10，句子最大长度为126，加上首尾标志[CLS]和[SEP]，max_length=128,albert_base_zh模型输出的数据shape为(batch,max_length,hidden_states)=(10,128,768)。
 
@@ -47,7 +51,20 @@ step 3: train
 ### predict
 
     python main.py predict
-    input text: [CLS]“刘老根大舞台”被文化部、国家旅游局联合评为首批“国家文化旅游重点项目”[SEP]
+    input text:“刘老根大舞台”被文化部、国家旅游局联合评为首批“国家文化旅游重点项目”
+
+### note
+在src/lstm_crf的model.py中
+a.albert的预训练模型作为embedding层
+	bert_config =BertConfig.from_pretrained(str(config['albert_config_path']), share_type='all')
+	self.word_embeddings = BertModel.from_pretrained(config['bert_dir'], config=bert_config)
+	self.word_embeddings.to(DEVICE)
+	self.word_embeddings.eval()
+
+b.embedding的输出是(batch_size, seq_len, embedding_dim)
+	embeddings = self.word_embeddings(input_ids=sentence, attention_mask=mask)
+	all_hidden_states, all_attentions = embeddings[-2:]  # 这里获取所有层的hidden_satates以及attentions
+	embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states的shape
 
 ### REFERENCES
 -  https://github.com/huggingface/transformers
