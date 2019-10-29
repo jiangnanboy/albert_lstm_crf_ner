@@ -93,7 +93,7 @@ class NER(object):
 
                 progress = ("█"*int(index * 25 / total_size)).ljust(25)
                 print("""epoch [{}] |{}| {}/{}\n\tloss {:.2f}""".format(
-                        epoch, progress, index, total_size, loss.item()
+                        epoch, progress, index, total_size, (loss/b_input_ids.size(0)).item()
                     )
                 )
                 self.evaluate()

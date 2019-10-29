@@ -61,11 +61,11 @@ class DataFormat():
                 for text, label in zip(train_data, tag_data):
                     tokens = text.split()
                     label = label.split()
-                    if len(tokens) > max_length - 2:  # 大于最大长度进行截断
-                        tokens = tokens[0:(max_length - 2)]
-                        label = label[0:(max_length - 2)]
-                    tokens_cs = '[CLS] ' + ' '.join(tokens) + ' [SEP]'
-                    label_cs = "[CLS] " + ' '.join(label) + ' [SEP]'
+                    if len(tokens) > max_length:  # 大于最大长度进行截断
+                        tokens = tokens[0:max_length]
+                        label = label[0:max_length]
+                    tokens_cs =  ' '.join(tokens)
+                    label_cs =  ' '.join(label)
                     # token -> index
                     tokenized_text = tokenizer.tokenize(tokens_cs)  # 用tokenizer对句子分词
                     input_ids = tokenizer.convert_tokens_to_ids(tokenized_text)  # 索引列表

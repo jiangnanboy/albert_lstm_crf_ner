@@ -10,7 +10,6 @@ from torch import nn
 # import torchsnooper  # 用于调试，运行时打印每行代码中tensor的信息
 
 from albert.model.modeling_albert import BertConfig, BertModel
-from albert.model.optimization import AdamW, WarmupLinearSchedule
 from albert.configs.base import config
 
 START_TAG = "[CLS]"
@@ -47,7 +46,6 @@ class BiLSTMCRF(nn.Module):
             embedding_dim=100
     ):
         super(BiLSTMCRF, self).__init__()
-
         self.batch_size = batch_size
         self.hidden_dim = hidden_dim
         self.embedding_dim = embedding_dim
@@ -59,10 +57,9 @@ class BiLSTMCRF(nn.Module):
         self.transitions = nn.Parameter(
             torch.randn(self.tag_size, self.tag_size, device=DEVICE)
         )
-        self.transitions.data[:, self.tag_map[START_TAG]] = -1000.
-        self.transitions.data[self.tag_map[STOP_TAG], :] = -1000.
+        self.transitions.detach()[:, self.tag_map[START_TAG]] = -1000.
+        self.transitions.detach()[self.tag_map[STOP_TAG], :] = -1000.
         # self.transitions = self.transitions.to(DEVICE)
-
         bert_config = BertConfig.from_pretrained(str(config['albert_config_path']), share_type='all')
         self.word_embeddings = BertModel.from_pretrained(config['bert_dir'], config=bert_config)
         self.word_embeddings.to(DEVICE)
@@ -71,41 +68,42 @@ class BiLSTMCRF(nn.Module):
         self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim // 2,
                             num_layers=1, bidirectional=True, batch_first=True, dropout=self.dropout)
         self.hidden2tag = nn.Linear(self.hidden_dim, self.tag_size)
+        self.hidden = self.init_hidden()
 
     def init_hidden(self):
         return (torch.randn(2, self.batch_size, self.hidden_dim // 2, device=DEVICE),
                 torch.randn(2, self.batch_size, self.hidden_dim // 2, device=DEVICE))
 
-    # @torchsnooper.snoop()
-    def __get_lstm_features(self, sentences, masks):
-        self.batch_size = sentences.size(0)
-        hidden = self.init_hidden()
-        embeddings = self.word_embeddings(input_ids=sentences, attention_mask=masks)
+    def __get_lstm_features(self, sentence, mask):
+        self.batch_size = sentence.size(0)
+        self.hidden = self.init_hidden()
+        length = sentence.shape[1]
+        embeddings = self.word_embeddings(input_ids=sentence, attention_mask=mask)
         all_hidden_states, all_attentions = embeddings[-2:]  # 这里获取所有层的hidden_satates以及attentions
         embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states的shape
 
-        lstm_out, _ = self.lstm(embeddings, hidden)
-        lstm_out = lstm_out.reshape(-1, self.hidden_dim)
-        # lstm_out = lstm_out.reshape(self.batch_size, -1, self.hidden_dim) #batch,embedding_dim,hidden_dim
+        lstm_out, self.hidden = self.lstm(embeddings, self.hidden)
+        lstm_out = lstm_out.reshape(self.batch_size, -1, self.hidden_dim)  # batch,embedding_dim,hidden_dim
+
         # lstm_out = lstm_out.reshape(-1, self.hidden_dim)
         # l_out = self.hidden2tag(lstm_out)
         # lstm_feats = l_out.reshape(self.batch_size, length, -1)
         # print('after lstm_feats shape:{}'.format(lstm_feats.shape))
 
         logits = self.hidden2tag(lstm_out)
-        logits = logits.reshape(self.batch_size, len(sentences[1]), -1)
         return logits
 
     def real_path_score_(self, feats, tags):
         # Gives the score of a provided tag sequence
         score = 0
+        tags = torch.cat([torch.tensor([self.tag_map[START_TAG]], dtype=torch.long).to(DEVICE), tags])
+        tags = tags.to(DEVICE)
         for i, feat in enumerate(feats):
             score = score + \
                     self.transitions[tags[i], tags[i + 1]] + feat[tags[i + 1]]
         score = score + self.transitions[tags[-1], self.tag_map[STOP_TAG]]
         return score
 
-    # @torchsnooper.snoop()
     def real_path_score(self, logits, label):
         '''
         caculate real path score
@@ -117,22 +115,13 @@ class BiLSTMCRF(nn.Module):
         Transition_Score = Trans(label[START], label[1]) + Trans(label[1], label[2]) + ... + Trans(label[n-1], label[STOP])
         '''
         score = 0
-        # label = torch.cat([torch.tensor([self.tag_map[START_TAG]], dtype=torch.long).to(DEVICE), label])
-        # label = label.to(DEVICE)
-        emission_score = 0
+        label = torch.cat([torch.tensor([self.tag_map[START_TAG]], dtype=torch.long).to(DEVICE), label])
+        label = label.to(DEVICE)
         for index, logit in enumerate(logits):
-            emission_score += logit[label[index]]
-        transition_score = 0
-        for index in range(len(logits) - 1):
-            transition_score += self.transitions[label[index], label[index + 1]]
-        score = emission_score + transition_score
-
-        # for index, logit in enumerate(logits):
-        #     emission_score = logit[label[index]]
-        #     transition_score = self.transitions[label[index], label[index + 1]]
-        #     score += emission_score + transition_score
-        # score += self.transitions[label[-1], self.tag_map[STOP_TAG]]
-
+            emission_score = logit[label[index + 1]]
+            transition_score = self.transitions[label[index], label[index + 1]]
+            score += emission_score + transition_score
+        score += self.transitions[label[-1], self.tag_map[STOP_TAG]]
         return score
 
     def total_score(self, logits, label):
@@ -148,8 +137,7 @@ class BiLSTMCRF(nn.Module):
         previous = torch.full((1, self.tag_size), 0, device=DEVICE)
         for index in range(len(logits)):
             previous = previous.expand(self.tag_size, self.tag_size).t()
-            obs = logits[index].reshape(1, -1).expand(self.tag_size, self.tag_size)
-
+            obs = logits[index].view(1, -1).expand(self.tag_size, self.tag_size)
             scores = previous + obs + self.transitions
             previous = log_sum_exp(scores)
         previous = previous + self.transitions[:, self.tag_map[STOP_TAG]]
@@ -157,17 +145,14 @@ class BiLSTMCRF(nn.Module):
         total_scores = log_sum_exp(previous.t())[0]
         return total_scores
 
-    # @torchsnooper.snoop()
-    def neg_log_likelihood(self, sentences, masks, tags):  # sentences,masks,tags = (batch_, seq_len)
-        logits = self.__get_lstm_features(sentences, masks)  # logis = (batch, seq_len, tags_size)
+    def neg_log_likelihood(self, sentences, masks, tags):
+        logits = self.__get_lstm_features(sentences, masks)
         real_path_score = 0
         total_score = 0
         for logit, tag in zip(logits, tags):
             real_path_score += self.real_path_score(logit, tag)
             total_score += self.total_score(logit, tag)
-        # print("total score ", total_score)
-        # print("real score ", real_path_score)
-        return (total_score - real_path_score) / self.batch_size
+        return total_score - real_path_score
 
     def forward(self, sentences, masks):
         """
