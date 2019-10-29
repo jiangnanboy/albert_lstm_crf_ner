@@ -172,7 +172,7 @@ class NER(object):
         with torch.no_grad():
             if not input_str:
                 input_str = input("input text: ")
-            input_vec = '[CLS] '+ ' '.join(list(input_str)) + ' [SEP]'
+            input_vec = ' '.join(list(input_str))
             tokenized_text = tokenizer.tokenize(input_vec)  # 用tokenizer对句子分词
             input_ids = tokenizer.convert_tokens_to_ids(tokenized_text)  # 索引列表
             input_mask = [1] * len(input_ids)
