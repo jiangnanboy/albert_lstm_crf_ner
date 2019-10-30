@@ -67,7 +67,7 @@ b.embedding的输出是(batch_size, seq_len, embedding_dim)
 
 	> embeddings = self.word_embeddings(input_ids=sentence, attention_mask=mask)
 	  all_hidden_states, all_attentions = embeddings[-2:]  # 这里获取所有层的hidden_satates以及attentions
-	  embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states的shape
+	  embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states
 
 ### REFERENCES
 -  https://github.com/huggingface/transformers

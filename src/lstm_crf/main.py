@@ -20,8 +20,8 @@ class NER(object):
 
     def __init_model(self, exec_type):
         if exec_type == "train":
-            self.train_data = DataFormat(batch_size=self.batch_size, max_length=self.max_legnth)
-            self.dev_data = DataFormat(batch_size=32, max_length=self.max_legnth, data_type="dev")
+            self.train_data = DataFormat(batch_size=self.batch_size, max_length=self.max_legnth, data_type='train')
+            self.dev_data = DataFormat(batch_size=16, max_length=self.max_legnth, data_type="dev")
 
             self.model = BiLSTMCRF(
                 tag_map=self.train_data.tag_map,
@@ -77,32 +77,86 @@ class NER(object):
 
     def train(self):
         self.model.to(DEVICE)
-        optimizer = optim.Adam(self.model.parameters(), lr = 0.01)
+        optimizer = optim.Adam(self.model.parameters(), lr=0.01)
         # optimizer = optim.SGD(ner_model.parameters(), lr=0.01)
-        total_size = len(self.train_data.train_dataloader)
+        total_size = self.train_manager.train_dataloader.__len__()
         for epoch in range(5):
             index = 0
-            for batch in self.train_data.train_dataloader:
+            for batch in self.train_manager.train_dataloader:
                 self.model.train()
                 index += 1
-                self.model.zero_grad() #与optimizer.zero_grad()作用一样
-
+                self.model.zero_grad()  # 与optimizer.zero_grad()作用一样
                 batch = tuple(t.to(DEVICE) for t in batch)
-                b_input_ids, b_input_mask, b_labels = batch
-                loss = self.model.neg_log_likelihood(b_input_ids, b_input_mask, b_labels)
+                b_input_ids, b_input_mask, b_labels, b_out_masks = batch
 
-                progress = ("█"*int(index * 25 / total_size)).ljust(25)
+                bert_encode = self.model(b_input_ids, b_input_mask)
+                loss = self.model.loss_fn(bert_encode=bert_encode, tags=b_labels, output_mask=b_out_masks)
+                progress = ("█" * int(index * 25 / total_size)).ljust(25)
                 print("""epoch [{}] |{}| {}/{}\n\tloss {:.2f}""".format(
-                        epoch, progress, index, total_size, (loss/b_input_ids.size(0)).item()
-                    )
-                )
-                self.evaluate()
-                print("-"*50)
+                    epoch, progress, index, total_size, loss.item()))
                 loss.backward()
                 optimizer.step()
-        torch.save(self.model.state_dict(), self.model_path+'params.pkl')
 
-    def evaluate(self):
+                # predicts = self.model.predict(bert_encode, b_out_masks)
+                # b_labels = b_labels.view(1, -1)
+                # b_labels = b_labels[b_labels != -1]
+                # self.model.acc_f1(predicts, b_labels)
+                self.eva1_1()
+                print("-" * 50)
+        torch.save(self.model.state_dict(), self.model_path + 'params.pkl')
+
+    def eva1_1(self):
+        self.model.eval()
+        count = 0
+        y_predicts, y_labels = [], []
+        eval_loss, eval_acc, eval_f1 = 0, 0, 0
+        with torch.no_grad():
+            for step, batch in enumerate(self.dev_manager.train_dataloader):
+                batch = tuple(t.to(DEVICE) for t in batch)
+                input_ids, input_mask, label_ids, output_mask = batch
+                bert_encode = self.model(input_ids, input_mask)
+                eval_los = self.model.loss_fn(bert_encode=bert_encode, tags=label_ids, output_mask=output_mask)
+                eval_loss = eval_los + eval_loss
+                count += 1
+                predicts = self.model.predict(bert_encode, output_mask)
+                y_predicts.append(predicts)
+
+                label_ids = label_ids.view(1, -1)
+                label_ids = label_ids[label_ids != -1]
+                y_labels.append(label_ids)
+
+            eval_predicted = torch.cat(y_predicts, dim=0)
+            eval_labeled = torch.cat(y_labels, dim=0)
+            self.model.acc_f1(eval_predicted, eval_labeled)
+            self.model.class_report(eval_predicted, eval_labeled)
+
+    def predict_1(self):
+        self.model.eval()  # 取消batchnorm和dropout,用于评估阶段
+        self.model.to(DEVICE)
+        VOCAB = config['albert_vocab_path']  # your path for model and vocab
+        tokenizer = BertTokenizer.from_pretrained(VOCAB)
+        while True:
+            with torch.no_grad():
+                input_str = input("请输入文本: ")
+                tokens = ' '.join(list(input_str))
+                sentences = '[CLS] ' + tokens + ' [SEP]'
+                tokenized_text = tokenizer.tokenize(sentences)  # 用tokenizer对句子分词
+                input_ids = tokenizer.convert_tokens_to_ids(tokenized_text)  # 索引列表
+                input_mask = [1] * len(input_ids)
+                output_mask = [1] * len(tokens)
+                output_mask = [0] + output_mask + [0]
+                input_ids_tensor = torch.LongTensor(input_ids).view(-1, 1)
+                input_mask_tensor = torch.LongTensor(input_mask).reshape(-1, 1)
+                output_mask_tensor = torch.LongTensor(output_mask).reshape(-1,1)
+                input_ids_tensor = input_ids_tensor.to(DEVICE)
+                input_mask_tensor = input_mask_tensor.to(DEVICE)
+                output_mask_tensor = output_mask_tensor.to(DEVICE)
+                bert_encode = self.model(input_ids_tensor, input_mask_tensor)
+                paths = self.model.predict(bert_encode, output_mask_tensor)
+                print('paths:{}'.format(paths))
+
+
+    def eval_2(self):
         self.model.eval()
         with torch.no_grad():
             index = 0
@@ -163,7 +217,7 @@ class NER(object):
             有时候还会在验证阶段导致OOM(Out Of Memory)错误，因此我们在验证和测试阶段，最好显式地取消掉模型变量的梯度。
             使用torch.no_grad()这个上下文管理器就可以了。
     '''
-    def predict(self, input_str=""):
+    def predict_2(self, input_str=""):
         self.model.eval() #取消batchnorm和dropout,用于评估阶段
         self.model.to(DEVICE)
         VOCAB = config['albert_vocab_path']  # your path for model and vocab
@@ -195,4 +249,4 @@ if __name__ == "__main__":
         ner.train()
     elif sys.argv[1] == "predict":
         ner = NER("predict")
-        print(ner.predict())
+        print(ner.predict_1())

@@ -8,10 +8,11 @@ from albert.model.tokenization_bert import BertTokenizer
 import os
 
 class InputFeatures(object):
-    def __init__(self, input_id, label_id, input_mask):
+    def __init__(self, input_id, label_id, input_mask, output_mask):
         self.input_id = input_id
         self.label_id = label_id
         self.input_mask = input_mask
+        self.output_mask = output_mask
 
 class DataFormat():
     def __init__(self, max_length=100, batch_size=20, data_type='train'):
@@ -21,18 +22,15 @@ class DataFormat():
         self.max_length = max_length
         self.data_type = data_type
         self.train_data = []
-        self.tag_map = {'[PAD]': 0,
-                   'O': 1,
-                   'B_T': 2,
-                   'I_T': 3,
-                   'B_LOC': 4,
-                   'I_LOC': 5,
-                   'B_ORG': 6,
-                   'I_ORG': 7,
-                   'B_PER': 8,
-                   'I_PER': 9,
-                   '[CLS]': 10,
-                   '[SEP]': 11}
+        self.tag_map = {'B_T': 0,
+                   'I_T': 1,
+                   'B_LOC': 2,
+                   'I_LOC': 3,
+                   'B_ORG': 4,
+                   'I_ORG': 5,
+                   'B_PER': 6,
+                   'I_PER': 7,
+                        'O': 8}
         base_path = os.path.abspath(os.path.join(os.getcwd(), "../.."))
         if data_type == "train":
             self.data_path = base_path + '/data/ner_data/train/'
@@ -61,27 +59,49 @@ class DataFormat():
                 for text, label in zip(train_data, tag_data):
                     tokens = text.split()
                     label = label.split()
-                    if len(tokens) > max_length:  # 大于最大长度进行截断
-                        tokens = tokens[0:max_length]
-                        label = label[0:max_length]
-                    tokens_cs =  ' '.join(tokens)
-                    label_cs =  ' '.join(label)
+                    if len(tokens) > max_length - 2:  # 大于最大长度进行截断
+                        tokens = tokens[0:(max_length - 2)]
+                        label = label[0:(max_length - 2)]
+                    tokens_cs = '[CLS] ' + ' '.join(tokens) + ' [SEP]'
+                    label_cs = ' '.join(label)
+
                     # token -> index
                     tokenized_text = tokenizer.tokenize(tokens_cs)  # 用tokenizer对句子分词
                     input_ids = tokenizer.convert_tokens_to_ids(tokenized_text)  # 索引列表
 
-                    # tag -> index
+                    # tag -> index 这里没有对label_ids加[CLS]和[SEP]
                     label_ids = [label_dic[i] for i in label_cs.split()]
                     input_mask = [1] * len(input_ids)
 
                     while len(input_ids) < max_length:
                         input_ids.append(0)
                         input_mask.append(0)
-                        label_ids.append(0)
+                    while len(label_ids) < max_length:
+                        label_ids.append(-1)
+
+                    ## output_mask用来过滤bert输出的特殊符号[CLS]、[SEP]、[PAD]
+                    ## 此外，也是为了适应crf
+                    output_mask = [1] * len(tokens)
+                    output_mask = [0] + output_mask + [0]
+                    while len(output_mask) < max_length:
+                        output_mask.append(0)
+
                     assert len(input_ids) == max_length
                     assert len(input_mask) == max_length
                     assert len(label_ids) == max_length
-                    feature = InputFeatures(input_id=input_ids, input_mask=input_mask, label_id=label_ids)
+                    assert len(output_mask) == max_length
+
+                    # ----------------处理后结果-------------------------
+                    # for example, in the case of max_seq_length=10:
+                    # raw_data:          我 是 中 国 人
+                    # token:       [CLS] 我 是 中 国 人  [SEP]
+                    # input_ids:     101 2  12 13 16 14   102   0 0 0
+                    # input_mask:      1 1  1  1  1  1      1   0 0 0
+                    # label_id:          T  T  O  O  O   -1 -1 -1 -1 -1          label_id中不包括[CLS]和[SEP]
+                    # output_mask:     0 1  1  1  1  1      0   0 0 0
+
+                    feature = InputFeatures(input_id=input_ids, input_mask=input_mask, label_id=label_ids,
+                                            output_mask=output_mask)
                     self.train_data.append(feature)
 
     def prepare_batch(self, train_data, batch_size):
@@ -91,7 +111,12 @@ class DataFormat():
         train_ids = torch.LongTensor([temp.input_id for temp in train_data])
         train_masks = torch.LongTensor([temp.input_mask for temp in train_data])
         train_tags = torch.LongTensor([temp.label_id for temp in train_data])
-        train_dataset = TensorDataset(train_ids, train_masks, train_tags)
-        # train_sampler = RandomSampler(train_dataset)
-        return DataLoader(train_dataset, shuffle=True, batch_size=batch_size)
+        output_masks = torch.LongTensor([temp.output_mask for temp in train_data])
+        train_dataset = TensorDataset(train_ids, train_masks, train_tags, output_masks)
+
+        if self.data_type == 'train':
+            return DataLoader(train_dataset, shuffle=True, batch_size=batch_size)
+        elif self.data_type == 'dev':
+            return DataLoader(train_dataset, shuffle=False, batch_size=batch_size)
+
 
