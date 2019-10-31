@@ -2,7 +2,6 @@
 ### outline
 ![lstm_crf的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/lstm_crf_layers.png)
 
-<<<<<<< Updated upstream:README.md
 **lstm_crf**
 
 ![albert_lstm的模型结构](https://raw.githubusercontent.com/jiangnanboy/albert_lstm_crf_ner/master/pics/albert_lstm.png)
