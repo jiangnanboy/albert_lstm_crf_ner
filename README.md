@@ -47,6 +47,26 @@ step 3: train
 
     python main.py train
 	训练数据来自人民日报的标注数据
+
+### evaluate
+
+    > epoch [0] |██                       | 395/4473
+	  loss 0.07
+      epoch [0] |██                       | 396/4473
+	  loss 0.06
+      epoch [0] |██                       | 397/4473
+	  loss 0.06
+      epoch [0] |██                       | 398/4473
+	  loss 0.06
+      epoch [0] |██                       | 399/4473
+	  loss 0.06
+      epoch [0] |██                       | 400/4473
+	  loss 0.05
+	  eval
+	        ORG	recall 1.00	precision 1.00	f1 1.00
+	        PER	recall 0.97	precision 0.96	f1 0.96
+	        LOC	recall 1.00	precision 1.00	f1 1.00
+	        T	recall 0.84	precision 0.80	f1 0.82
 	
 ### predict
 
@@ -71,26 +91,6 @@ b.embedding的输出是(batch_size, seq_len, embedding_dim)
 	        #也可以只返回最后一层
 	        all_hidden_states, all_attentions = embeddings[-2:]  # 这里获取所有层的hidden_satates以及attentions
 	        embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states
-
-### evaluate
-
-    > epoch [0] |██                       | 395/4473
-	  loss 0.07
-      epoch [0] |██                       | 396/4473
-	  loss 0.06
-      epoch [0] |██                       | 397/4473
-	  loss 0.06
-      epoch [0] |██                       | 398/4473
-	  loss 0.06
-      epoch [0] |██                       | 399/4473
-	  loss 0.06
-      epoch [0] |██                       | 400/4473
-	  loss 0.05
-	  eval
-	        ORG	recall 1.00	precision 1.00	f1 1.00
-	        PER	recall 0.97	precision 0.96	f1 0.96
-	        LOC	recall 1.00	precision 1.00	f1 1.00
-	        T	recall 0.84	precision 0.80	f1 0.82
 
 ### REFERENCES
 -  https://github.com/huggingface/transformers
