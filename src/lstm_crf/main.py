@@ -95,17 +95,33 @@ class NER(object):
                 print("""epoch [{}] |{}| {}/{}\n\tloss {:.2f}""".format(
                     epoch, progress, index, total_size, loss.item()))
                 loss.backward()
+                # torch.nn.utils.clip_grad_norm_(self.model.parameters(),1) #梯度裁剪
                 optimizer.step()
-
+                # tarin data 的评估
                 # predicts = self.model.predict(bert_encode, b_out_masks)
                 # b_labels = b_labels.view(1, -1)
                 # b_labels = b_labels[b_labels != -1]
                 # self.model.acc_f1(predicts, b_labels)
-                self.eva1_1()
-                print("-" * 50)
+                if index % 100 == 0:
+                    self.eval_2()
+                    print("-" * 50)
         torch.save(self.model.state_dict(), self.model_path + 'params.pkl')
 
     def eva1_1(self):
+        '''
+        评估所有的单个tag，如下
+                    'B_T':
+                   'I_T'
+                   'B_LOC'
+                   'I_LOC'
+                   'B_ORG'
+                   'I_ORG'
+                   'B_PER'
+                   'I_PER'
+                        'O'
+        Returns:
+
+        '''
         self.model.eval()
         count = 0
         y_predicts, y_labels = [], []
@@ -130,83 +146,21 @@ class NER(object):
             self.model.acc_f1(eval_predicted, eval_labeled)
             self.model.class_report(eval_predicted, eval_labeled)
 
-    def predict_1(self):
-        self.model.eval()  # 取消batchnorm和dropout,用于评估阶段
-        self.model.to(DEVICE)
-        VOCAB = config['albert_vocab_path']  # your path for model and vocab
-        tokenizer = BertTokenizer.from_pretrained(VOCAB)
-        while True:
-            with torch.no_grad():
-                input_str = input("请输入文本: ")
-                tokens = ' '.join(list(input_str))
-                sentences = '[CLS] ' + tokens + ' [SEP]'
-                tokenized_text = tokenizer.tokenize(sentences)  # 用tokenizer对句子分词
-                input_ids = tokenizer.convert_tokens_to_ids(tokenized_text)  # 索引列表
-                input_mask = [1] * len(input_ids)
-                output_mask = [1] * len(tokens)
-                output_mask = [0] + output_mask + [0]
-                input_ids_tensor = torch.LongTensor(input_ids).view(-1, 1)
-                input_mask_tensor = torch.LongTensor(input_mask).reshape(-1, 1)
-                output_mask_tensor = torch.LongTensor(output_mask).reshape(-1,1)
-                input_ids_tensor = input_ids_tensor.to(DEVICE)
-                input_mask_tensor = input_mask_tensor.to(DEVICE)
-                output_mask_tensor = output_mask_tensor.to(DEVICE)
-                bert_encode = self.model(input_ids_tensor, input_mask_tensor)
-                paths = self.model.predict(bert_encode, output_mask_tensor)
-                print('paths:{}'.format(paths))
-
-
     def eval_2(self):
+        '''
+        只评估PER,ORG,LOC,T
+        :return:
+        '''
         self.model.eval()
         with torch.no_grad():
-            index = 0
-            #org
-            R_ORG = 0
-            P_ORG = 0
-            F1_ORG = 0
-            #per
-            R_PER = 0
-            P_PER = 0
-            F1_PER = 0
-            #loc
-            R_LOC = 0
-            P_LOC = 0
-            F1_LOC = 0
-            #time
-            R_T = 0
-            P_T = 0
-            F1_T = 0
-
-            for batch in self.dev_data.train_dataloader:
-                index += 1
+            for step, batch in enumerate(self.dev_manager.train_dataloader):
                 batch = tuple(t.to(DEVICE) for t in batch)
-                b_input_ids, b_input_mask, b_labels = batch
-                if len(b_input_ids) < self.dev_data.batch_size:
-                    break
-                _,paths = self.model(b_input_ids, b_input_mask)
+                input_ids, input_mask, label_ids, output_mask = batch
+                bert_encode = self.model(input_ids, input_mask)
+                predicts = self.model.predict(bert_encode, output_mask)
                 print("\teval")
                 for tag in self.tags:
-                    recall, precision, f1 = f1_score(b_labels, paths, tag, self.model.tag_map)
-                    if tag == 'ORG':
-                        R_ORG += recall
-                        P_ORG += precision
-                        F1_ORG += f1
-                    elif tag == 'PER':
-                        R_PER += recall
-                        P_PER += precision
-                        F1_PER += f1
-                    elif tag == 'LOC':
-                        R_LOC += recall
-                        P_LOC += precision
-                        F1_LOC += f1
-                    elif tag == 'T':
-                        R_T += recall
-                        P_T += precision
-                        F1_T += f1
-            print("\t{}\trecall {:.2f}\tprecision {:.2f}\tf1 {:.2f}".format("ORG", R_ORG/index, P_ORG/index, F1_ORG/index))
-            print("\t{}\trecall {:.2f}\tprecision {:.2f}\tf1 {:.2f}".format("PER", R_PER/index, P_PER/index, F1_PER/index))
-            print("\t{}\trecall {:.2f}\tprecision {:.2f}\tf1 {:.2f}".format("LOC", R_LOC/index, P_LOC/index, F1_LOC/index))
-            print("\t{}\trecall {:.2f}\tprecision {:.2f}\tf1 {:.2f}".format("T", R_T/index, P_T/index, F1_T/index))
+                    f1_score(label_ids, predicts, tag, self.model.tag_map)
 
     '''
     注意：
@@ -217,31 +171,36 @@ class NER(object):
             有时候还会在验证阶段导致OOM(Out Of Memory)错误，因此我们在验证和测试阶段，最好显式地取消掉模型变量的梯度。
             使用torch.no_grad()这个上下文管理器就可以了。
     '''
-    def predict_2(self, input_str=""):
-        self.model.eval() #取消batchnorm和dropout,用于评估阶段
+
+    def predict(self, input_str=""):
+        self.model.eval()  # 取消batchnorm和dropout,用于评估阶段
         self.model.to(DEVICE)
         VOCAB = config['albert_vocab_path']  # your path for model and vocab
         tokenizer = BertTokenizer.from_pretrained(VOCAB)
+        while True:
+            with torch.no_grad():
+                input_str = input("请输入文本: ")
+                input_ids = torch.LongTensor([tokenizer.encode(input_str,
+                                                               add_special_tokens=True)])  # add_spicial_tokens=True，为自动为sentence加上[CLS]和[SEP]
+                input_mask = [1] * len(input_ids)
+                output_mask = [0] + [1] * (len(input_ids) - 2) + [0]  # 用于屏蔽特殊token
 
-        with torch.no_grad():
-            if not input_str:
-                input_str = input("input text: ")
-            input_vec = ' '.join(list(input_str))
-            tokenized_text = tokenizer.tokenize(input_vec)  # 用tokenizer对句子分词
-            input_ids = tokenizer.convert_tokens_to_ids(tokenized_text)  # 索引列表
-            input_mask = [1] * len(input_ids)
+                input_ids_tensor = input_ids.view(1, -1)
+                input_mask_tensor = torch.LongTensor(input_mask).reshape(1, -1)
+                output_mask_tensor = torch.LongTensor(output_mask).reshape(1, -1)
+                input_ids_tensor = input_ids_tensor.to(DEVICE)
+                input_mask_tensor = input_mask_tensor.to(DEVICE)
+                output_mask_tensor = output_mask_tensor.to(DEVICE)
 
-            input_ids_tensor = torch.LongTensor(input_ids)
-            input_mask_tensor = torch.LongTensor(input_mask)
+                bert_encode = self.model(input_ids_tensor, input_mask_tensor)
+                predicts = self.model.predict(bert_encode, output_mask_tensor)
 
-            _, paths = self.model(input_ids_tensor, input_mask_tensor)
-            print("score:{}".format(_))
-            print('paths:{}'.format(paths))
-            entities = []
-            for tag in self.tags:
-                tags = get_tags(paths[0], tag, self.model.tag_map)
-                entities += format_result(tags, input_str, tag)
-        return entities
+                print('paths:{}'.format(predicts))
+                entities = []
+                for tag in self.tags:
+                    tags = get_tags(predicts[0], tag, self.model.tag_map)
+                    entities += format_result(tags, input_str, tag)
+                print(entities)
 
 if __name__ == "__main__":
     if sys.argv[1] == "train":

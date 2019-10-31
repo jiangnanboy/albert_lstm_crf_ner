@@ -64,7 +64,10 @@ class BiLSTMCRF(nn.Module):
     def forward(self, input_ids, attention_mask):
         self.batch_size = input_ids.size(0)
         self.hidden = self.init_hidden()
-        embeddings = self.word_embeddings(input_ids=input_ids, attention_mask=attention_mask)
+        with torch.no_grad():
+            embeddings = self.word_embeddings(input_ids=input_ids, attention_mask=attention_mask)
+        # 因为在albert中的config中设置了"output_hidden_states":"True","output_attentions":"True"，所以返回所有层
+        # 也可以只返回最后一层
         all_hidden_states, all_attentions = embeddings[-2:]  # 这里获取所有层的hidden_satates以及attentions
         embeddings = all_hidden_states[-2]  # 倒数第二层hidden_states的shape
         lstm_out, _ = self.lstm(embeddings, self.hidden)
@@ -77,8 +80,9 @@ class BiLSTMCRF(nn.Module):
 
     def predict(self, bert_encode, output_mask):
         predicts = self.crf.get_batch_best_path(bert_encode, output_mask)
-        predicts = predicts.view(1, -1).squeeze()
-        predicts = predicts[predicts != -1]
+        # 以下是用于主程序中的评估eval_1(); acc_f1,class_report的评估
+        # predicts = predicts.view(1, -1).squeeze()
+        # predicts = predicts[predicts != -1]
         return predicts
 
     def acc_f1(self, y_pred, y_true):
