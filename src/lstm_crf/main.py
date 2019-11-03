@@ -77,12 +77,25 @@ class NER(object):
 
     def train(self):
         self.model.to(DEVICE)
-        optimizer = optim.Adam(self.model.parameters(), lr=0.01)
-        # optimizer = optim.SGD(ner_model.parameters(), lr=0.01)
-        total_size = self.train_manager.train_dataloader.__len__()
+        #weight decay是放在正则项（regularization）前面的一个系数，正则项一般指示模型的复杂度，所以weight decay的作用是调节模型复杂度对损失函数的影响，若weight decay很大，则复杂的模型损失函数的值也就大。
+        optimizer = optim.Adam(self.model.parameters(), lr = 0.001, weight_decay=0.0005)
+        '''
+        当网络的评价指标不在提升的时候，可以通过降低网络的学习率来提高网络性能:
+        optimer指的是网络的优化器
+        mode (str) ，可选择‘min’或者‘max’，min表示当监控量停止下降的时候，学习率将减小，max表示当监控量停止上升的时候，学习率将减小。默认值为‘min’
+        factor 学习率每次降低多少，new_lr = old_lr * factor
+        patience=10，容忍网路的性能不提升的次数，高于这个次数就降低学习率
+        verbose（bool） - 如果为True，则为每次更新向stdout输出一条消息。 默认值：False
+        threshold（float） - 测量新最佳值的阈值，仅关注重大变化。 默认值：1e-4
+        cooldown(int)： 冷却时间“，当调整学习率之后，让学习率调整策略冷静一下，让模型再训练一段时间，再重启监测模式。
+        min_lr(float or list):学习率下限，可为 float，或者 list，当有多个参数组时，可用 list 进行设置。
+        eps(float):学习率衰减的最小值，当学习率变化小于 eps 时，则不调整学习率。
+        '''
+        # schedule = ReduceLROnPlateau(optimizer=optimizer, mode='min',factor=0.1,patience=100,verbose=False)
+        total_size = self.train_data.train_dataloader.__len__()
         for epoch in range(5):
             index = 0
-            for batch in self.train_manager.train_dataloader:
+            for batch in self.train_data.train_dataloader:
                 self.model.train()
                 index += 1
                 self.model.zero_grad()  # 与optimizer.zero_grad()作用一样
@@ -97,11 +110,7 @@ class NER(object):
                 loss.backward()
                 # torch.nn.utils.clip_grad_norm_(self.model.parameters(),1) #梯度裁剪
                 optimizer.step()
-                # tarin data 的评估
-                # predicts = self.model.predict(bert_encode, b_out_masks)
-                # b_labels = b_labels.view(1, -1)
-                # b_labels = b_labels[b_labels != -1]
-                # self.model.acc_f1(predicts, b_labels)
+                # schedule.step(loss)
                 if index % 100 == 0:
                     self.eval_2()
                     print("-" * 50)
@@ -127,7 +136,7 @@ class NER(object):
         y_predicts, y_labels = [], []
         eval_loss, eval_acc, eval_f1 = 0, 0, 0
         with torch.no_grad():
-            for step, batch in enumerate(self.dev_manager.train_dataloader):
+            for step, batch in enumerate(self.dev_data.train_dataloader):
                 batch = tuple(t.to(DEVICE) for t in batch)
                 input_ids, input_mask, label_ids, output_mask = batch
                 bert_encode = self.model(input_ids, input_mask)
@@ -153,7 +162,7 @@ class NER(object):
         '''
         self.model.eval()
         with torch.no_grad():
-            for step, batch in enumerate(self.dev_manager.train_dataloader):
+            for step, batch in enumerate(self.dev_data.train_dataloader):
                 batch = tuple(t.to(DEVICE) for t in batch)
                 input_ids, input_mask, label_ids, output_mask = batch
                 bert_encode = self.model(input_ids, input_mask)

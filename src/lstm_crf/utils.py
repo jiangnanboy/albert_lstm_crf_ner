@@ -15,25 +15,36 @@ def format_result(result, text, tag):
 def get_tags(path, tag, tag_map):
     begin_tag = tag_map.get("B_" + tag)
     mid_tag = tag_map.get("I_" + tag)
-    o_tag = tag_map.get("O")
-    begin = -1
-    end = 0
     tags = []
-    last_tag = 0
-    for index, tag in enumerate(path):
-        if tag == begin_tag and index == 0:
-            begin = 0
-        elif tag == begin_tag:
-            begin = index
-        elif last_tag in [mid_tag, begin_tag] and begin > -1:
-            end = index
-            tags.append([begin, end])
-        elif tag == o_tag:
-            begin = -1
-        last_tag = tag
+
+    for index_1 in range(len(path)):
+        if path[index_1] == begin_tag:
+            ner_index = 0
+            for index_2 in range(index_1 + 1, len(path)):
+                if path[index_2] == mid_tag:
+                    ner_index += 1
+                else:
+                    break
+            if ner_index != 0:
+                tags.append([index_1, index_1 + ner_index])
     return tags
 
 def f1_score(tar_path, pre_path, tag, tag_map):
+    '''
+    :param tar_path:  real tag
+    :param pre_path:  predict tag
+    :param tag: [ORG, PER, LOC, T]
+    :param tag_map: { 'B_T': 0,
+                        'I_T': 1,
+                        'B_LOC': 2,
+                        'I_LOC': 3,
+                        'B_ORG': 4,
+                        'I_ORG': 5,
+                        'B_PER': 6,
+                        'I_PER': 7,
+                        'O': 8}
+    :return:
+    '''
     origin = 0.
     found = 0.
     right = 0.
