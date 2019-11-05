@@ -91,7 +91,6 @@ b.embedding的输出是(batch_size, seq_len, embedding_dim)
 ### REFERENCES
 -  https://github.com/huggingface/transformers
 -  https://pytorch.org/tutorials/beginner/nlp/advanced_tutorial.html
--  https://github.com/yanwii/ChinsesNER-pytorch
 -  https://github.com/lonePatient/albert_pytorch
 -  https://github.com/brightmart/albert_zh
 -  https://createmomo.github.io/
