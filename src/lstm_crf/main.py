@@ -189,12 +189,11 @@ class NER(object):
         while True:
             with torch.no_grad():
                 input_str = input("请输入文本: ")
-                input_ids = torch.LongTensor([tokenizer.encode(input_str,
-                                                               add_special_tokens=True)])  # add_spicial_tokens=True，为自动为sentence加上[CLS]和[SEP]
+                input_ids = tokenizer.encode(input_str,add_special_tokens=True)  # add_spicial_tokens=True，为自动为sentence加上[CLS]和[SEP]
                 input_mask = [1] * len(input_ids)
                 output_mask = [0] + [1] * (len(input_ids) - 2) + [0]  # 用于屏蔽特殊token
 
-                input_ids_tensor = input_ids.view(1, -1)
+                input_ids_tensor = torch.LongTensor(input_ids).reshape(1, -1)
                 input_mask_tensor = torch.LongTensor(input_mask).reshape(1, -1)
                 output_mask_tensor = torch.LongTensor(output_mask).reshape(1, -1)
                 input_ids_tensor = input_ids_tensor.to(DEVICE)
@@ -217,4 +216,4 @@ if __name__ == "__main__":
         ner.train()
     elif sys.argv[1] == "predict":
         ner = NER("predict")
-        print(ner.predict_1())
+        print(ner.predict())
